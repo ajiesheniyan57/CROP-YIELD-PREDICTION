@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Crop Yield Prediction & Financial Analytics Dashboard</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- App Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="app-header">
+        <div class="container header-content">
+            <div class="brand-box">
+                <div class="brand-icon">
+                    <i class="fas fa-seedling"></i>
+                </div>
+                <div class="brand-title">
+                    <h1>AgriYield AI Dashboard</h1>
+                    <div class="brand-subtitle">Crop Yield, Financial Spending & Net Profit Intelligence Engine</div>
+                </div>
+            </div>
+
+            <div class="header-right-actions">
+                <div class="header-badge">
+                    <div class="pulse-dot"></div>
+                    <span>ML Model Active: RandomForest Regressor</span>
+                </div>
+
+                <!-- User Session Pill / Auth Controls -->
+                <div id="userNavBox">
+                    {% if user %}
+                    <div class="user-profile-badge">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="navUsername">{{ user.username }}</span>
+                        <span class="user-role-tag">{{ user.role }}</span>
+                        <button class="logout-btn" onclick="handleLogout()" title="Logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                    {% else %}
+                    <button class="auth-trigger-btn" onclick="openAuthModal('login')">
+                        <i class="fas fa-user-lock"></i> Login / Sign Up
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        
+        <!-- Preset Scenario Chips -->
+        <div class="presets-section">
+            <div class="presets-label"><i class="fas fa-bolt text-gold"></i> Quick Farm Presets:</div>
+            <button class="preset-chip" onclick="loadPreset('wheat_optimal')">
+                <i class="fas fa-wheat-awn text-gold"></i> Optimal Wheat (Irrigated)
+            </button>
+            <button class="preset-chip" onclick="loadPreset('rice_paddy')">
+                <i class="fas fa-bowl-rice text-green"></i> Rice Paddy (Monsoon)
+            </button>
+            <button class="preset-chip" onclick="loadPreset('potato_sandy')">
+                <i class="fas fa-cubes-stacked text-blue"></i> High-Tech Potato Farm
+            </button>
+            <button class="preset-chip" onclick="loadPreset('sorghum_drought')">
+                <i class="fas fa-sun text-gold"></i> Drought Sorghum (Rainfed)
+            </button>
+        </div>
+
+        <!-- Main Dashboard Layout -->
+        <div class="dashboard-grid">
+            
+            <!-- Left Panel: Form Inputs -->
+            <aside class="control-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-sliders"></i> Agricultural Parameters</h2>
+                    <span class="kpi-badge badge-success">Live Engine</span>
+                </div>
+
+                <form id="predictionForm">
+                    
+                    <!-- Section 1: Region & Crop -->
+                    <div class="form-group-title"><i class="fas fa-globe"></i> 1. Location & Crop</div>
+                    
+                    <div class="input-field">
+                        <label for="area">Country / Region</label>
+                        <select name="area" id="area" required>
+                            {% for area in areas %}
+                            <option value="{{ area }}" {% if area == 'India' %}selected{% endif %}>{{ area }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="input-field">
+                        <label for="crop">Target Crop</label>
+                        <select name="crop" id="crop" required>
+                            {% for crop in crops %}
+                            <option value="{{ crop }}" {% if crop == 'Wheat' %}selected{% endif %}>{{ crop }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="input-field">
+                        <label for="farm_area">Farm Size (Hectares) <span id="farm_area_val" class="range-val">10 Ha</span></label>
+                        <div class="range-wrap">
+                            <input type="range" name="farm_area" id="farm_area" class="range-slider" min="1" max="100" value="10">
+                        </div>
+                    </div>
+
+                    <div class="input-field">
+                        <label for="year">Harvest Year</label>
+                        <input type="number" name="year" id="year" value="2024" min="2000" max="2035" required>
+                    </div>
+
+                    <!-- Section 2: Climate & Water -->
+                    <div class="form-group-title"><i class="fas fa-cloud-sun-rain"></i> 2. Climate & Environment</div>
+
+                    <div class="input-field">
+                        <label for="rainfall">Annual Rainfall (mm) <span id="rainfall_val" class="range-val">1200 mm</span></label>
+                        <div class="range-wrap">
+                            <input type="range" name="rainfall" id="rainfall" class="range-slider" min="200" max="3000" step="25" value="1200">
+                        </div>
+                    </div>
+
+                    <div class="input-field">
+                        <label for="temp">Avg Temperature (°C) <span id="temp_val" class="range-val">25 °C</span></label>
+                        <div class="range-wrap">
+                            <input type="range" name="temp" id="temp" class="range-slider" min="5" max="45" step="1" value="25">
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Soil & Water Quality -->
+                    <div class="form-group-title"><i class="fas fa-droplet"></i> 3. Soil & Hydrology</div>
+
+                    <div class="input-field">
+                        <label for="soil_type">Soil Type</label>
+                        <select name="soil_type" id="soil_type" required>
+                            {% for soil in soil_types %}
+                            <option value="{{ soil }}" {% if soil == 'Loamy' %}selected{% endif %}>{{ soil }} Soil</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="input-field">
+                        <label for="water_availability">Water Availability</label>
+                        <select name="water_availability" id="water_availability" required>
+                            {% for wa in water_availabilities %}
+                            <option value="{{ wa }}" {% if 'Moderate' in wa %}selected{% endif %}>{{ wa }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="input-field">
+                        <label for="water_quality">Water Quality Index</label>
+                        <select name="water_quality" id="water_quality" required>
+                            {% for wq in water_qualities %}
+                            <option value="{{ wq }}" {% if 'Optimal' in wq %}selected{% endif %}>{{ wq }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="input-field">
+                        <label for="season">Cropping Season</label>
+                        <select name="season" id="season" required>
+                            {% for s in seasons %}
+                            <option value="{{ s }}" {% if 'Rabi' in s %}selected{% endif %}>{{ s }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Section 4: Pesticides & Price -->
+                    <div class="form-group-title"><i class="fas fa-dollar-sign"></i> 4. Protection & Market</div>
+
+                    <div class="input-field">
+                        <label for="pesticides">Pesticides Protection <span id="pesticides_val" class="range-val">150 Tonnes</span></label>
+                        <div class="range-wrap">
+                            <input type="range" name="pesticides" id="pesticides" class="range-slider" min="10" max="1000" step="10" value="150">
+                        </div>
+                    </div>
+
+                    <div class="input-field">
+                        <label for="market_price">Market Price ($ / Tonne)</label>
+                        <input type="number" name="market_price" id="market_price" placeholder="Default: $340" step="5">
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <button type="submit" id="btnSubmit" class="btn-primary">
+                        <i class="fas fa-brain"></i> Predict Yield & Calculate Profit
+                    </button>
+
+                    <button type="button" class="btn-secondary" onclick="saveCurrentScenario()">
+                        <i class="fas fa-database"></i> Save Scenario to Database
+                    </button>
+                </form>
+            </aside>
+
+            <!-- Right Panel: Executive KPI Stats & Analytics Charts -->
+            <main class="results-panel">
+                
+                <!-- Executive KPI Stat Cards -->
+                <div class="kpi-grid">
+                    
+                    <!-- Card 1: Total Yield -->
+                    <div class="kpi-card" style="--card-accent: #10B981;">
+                        <div class="kpi-title">
+                            <span>PREDICTED CROP YIELD</span>
+                            <i class="fas fa-wheat-awn text-green"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiYield">0.00 Tonnes</div>
+                        <div class="kpi-subtext" id="kpiYieldPerHa">0.0 Tonnes / Ha</div>
+                    </div>
+
+                    <!-- Card 2: Total Spending -->
+                    <div class="kpi-card" style="--card-accent: #F59E0B;">
+                        <div class="kpi-title">
+                            <span>TOTAL SPENDING</span>
+                            <i class="fas fa-coins text-gold"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiSpending">$0.00</div>
+                        <div class="kpi-subtext" id="kpiSpendingPerHa">$0 / Ha</div>
+                    </div>
+
+                    <!-- Card 3: Gross Revenue -->
+                    <div class="kpi-card" style="--card-accent: #3B82F6;">
+                        <div class="kpi-title">
+                            <span>GROSS REVENUE</span>
+                            <i class="fas fa-hand-holding-dollar text-blue"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiRevenue">$0.00</div>
+                        <div class="kpi-subtext" id="kpiMarketPrice">@ $0 / Tonne</div>
+                    </div>
+
+                    <!-- Card 4: Net Profit -->
+                    <div class="kpi-card" style="--card-accent: #8B5CF6;">
+                        <div class="kpi-title">
+                            <span>NET PROFIT</span>
+                            <i class="fas fa-chart-line text-purple"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiProfit">$0.00</div>
+                        <div class="kpi-subtext" id="kpiMargin">+0% Margin</div>
+                    </div>
+
+                    <!-- Card 5: ROI -->
+                    <div class="kpi-card" style="--card-accent: #EC4899;">
+                        <div class="kpi-title">
+                            <span>RETURN ON INVESTMENT</span>
+                            <i class="fas fa-percent text-pink"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiRoi">0.0%</div>
+                        <div class="kpi-subtext" id="kpiBreakeven">Break-even: $0 / Tonne</div>
+                    </div>
+
+                    <!-- Card 6: Agronomic Score -->
+                    <div class="kpi-card" style="--card-accent: #14B8A6;">
+                        <div class="kpi-title">
+                            <span>AGRONOMIC HEALTH SCORE</span>
+                            <i class="fas fa-shield-halved text-teal"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiAgronomicScore">0%</div>
+                        <div class="kpi-subtext">Multi-Factor Compatibility</div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="charts-grid">
+                    
+                    <!-- Chart 1: Cost Breakdown Donut -->
+                    <div class="chart-card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-chart-pie text-green"></i> Spending Cost Breakdown</h2>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="costBreakdownCanvas"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Chart 2: Profit Sensitivity Line -->
+                    <div class="chart-card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-chart-line text-blue"></i> Profit vs Market Price Curve</h2>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="profitSensitivityCanvas"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Chart 3: Agronomic Factors Radar -->
+                    <div class="chart-card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-compass text-gold"></i> Soil & Hydrology Compatibility</h2>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="agronomicRadarCanvas"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Chart 4: Yield Comparison Bar -->
+                    <div class="chart-card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-chart-column text-purple"></i> ML Base vs Adjusted Yield</h2>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="yieldBenchmarkCanvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Saved Scenarios Comparison Card -->
+                <div class="scenarios-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-database text-gold"></i> Saved Scenarios & Database History</h2>
+                        <div class="card-actions">
+                            <button class="action-btn-sm" onclick="downloadReportCSV()">
+                                <i class="fas fa-download"></i> Export CSV Report
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Scenario Name</th>
+                                    <th>Region</th>
+                                    <th>Crop</th>
+                                    <th>Predicted Yield</th>
+                                    <th>Total Spending</th>
+                                    <th>Net Profit</th>
+                                    <th>ROI %</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scenariosTableBody">
+                                <tr>
+                                    <td colspan="8" class="empty-table">
+                                        <i class="fas fa-folder-open"></i> Loading database scenarios...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal-backdrop" style="display: none;">
+        <div class="modal-content auth-modal-box">
+            <div class="modal-header">
+                <h3 id="authModalTitle"><i class="fas fa-user-shield"></i> User Authentication</h3>
+                <button class="modal-close-btn" onclick="closeAuthModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-tabs">
+                    <button id="tabLoginBtn" class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
+                    <button id="tabRegisterBtn" class="auth-tab" onclick="switchAuthTab('register')">Register Account</button>
+                </div>
+
+                <div id="authAlert" class="auth-alert" style="display: none;"></div>
+
+                <!-- Login Form -->
+                <form id="loginForm" onsubmit="submitLogin(event)">
+                    <div class="input-field">
+                        <label for="loginUsername">Username or Email</label>
+                        <input type="text" id="loginUsername" placeholder="e.g. john_farmer" required>
+                    </div>
+                    <div class="input-field">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn-primary full-width">
+                        <i class="fas fa-sign-in-alt"></i> Login to Dashboard
+                    </button>
+                </form>
+
+                <!-- Register Form -->
+                <form id="registerForm" onsubmit="submitRegister(event)" style="display: none;">
+                    <div class="input-field">
+                        <label for="regUsername">Username</label>
+                        <input type="text" id="regUsername" placeholder="e.g. john_farmer" required>
+                    </div>
+                    <div class="input-field">
+                        <label for="regEmail">Email Address</label>
+                        <input type="email" id="regEmail" placeholder="john@agriyield.ai" required>
+                    </div>
+                    <div class="input-field">
+                        <label for="regPassword">Password</label>
+                        <input type="password" id="regPassword" placeholder="Minimum 6 characters" required minlength="6">
+                    </div>
+                    <div class="input-field">
+                        <label for="regRole">Role</label>
+                        <select id="regRole">
+                            <option value="Farmer">Farmer / Agronomist</option>
+                            <option value="Researcher">Agricultural Researcher</option>
+                            <option value="Enterprise">Enterprise Manager</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary full-width">
+                        <i class="fas fa-user-plus"></i> Create Account
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application JavaScript -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
