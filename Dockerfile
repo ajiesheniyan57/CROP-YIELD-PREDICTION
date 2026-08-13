@@ -19,7 +19,9 @@ WORKDIR /app
 
 # Create non-root app user for security
 RUN groupadd -g 1000 appgroup && \
-    useradd -u 1000 -g appgroup -s /bin/sh appuser
+    useradd -u 1000 -g appgroup -m -s /bin/sh appuser && \
+    mkdir -p /home/appuser && \
+    chown -R appuser:appgroup /home/appuser
 
 # Copy installed python dependencies from builder stage
 COPY --from=builder /install /usr/local
@@ -35,6 +37,7 @@ USER appuser
 # Environment defaults
 ENV PORT=5000 \
     HOST=0.0.0.0 \
+    HOME=/home/appuser \
     PYTHONUNBUFFERED=1 \
     FLASK_ENV=production
 
@@ -45,4 +48,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
 
 # Production WSGI server launch
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "2", "--timeout", "120", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "4", "--preload", "--timeout", "120", "app:app"]
