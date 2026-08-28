@@ -12,14 +12,33 @@ from models import db, User, SavedScenario
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Persistent secret key for continuous session validity across restarts
+SECRET_KEY_FILE = os.path.join(BASE_DIR, '.secret_key')
+if os.environ.get('SECRET_KEY'):
+    secret_key = os.environ.get('SECRET_KEY')
+elif os.path.exists(SECRET_KEY_FILE):
+    with open(SECRET_KEY_FILE, 'r') as f:
+        secret_key = f.read().strip()
+else:
+    import secrets
+    secret_key = secrets.token_hex(32)
+    try:
+        with open(SECRET_KEY_FILE, 'w') as f:
+            f.write(secret_key)
+    except Exception:
+        pass
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'agriyield_ai_production_secret_key_2026')
+app.config['SECRET_KEY'] = secret_key
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f"sqlite:///{os.path.join(BASE_DIR, 'agriyield.db')}")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
+app.config['REMEMBER_COOKIE_REFRESH_EACH_REQUEST'] = True
 
 db.init_app(app)
 
@@ -123,11 +142,12 @@ def api_register():
         description: User or email already exists or invalid data
     """
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         username = data.get('username', '').strip()
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
         role = data.get('role', 'Farmer')
+        remember = bool(data.get('remember', True))
 
         if not username or not email or not password:
             return jsonify({"status": "error", "message": "Username, email and password are required"}), 400
@@ -138,15 +158,18 @@ def api_register():
         if len(password) < 6:
             return jsonify({"status": "error", "message": "Password must be at least 6 characters long"}), 400
 
-        if User.query.filter((User.username == username) | (User.email == email)).first():
-            return jsonify({"status": "error", "message": "Username or Email already registered"}), 400
+        if User.query.filter(User.username == username).first():
+            return jsonify({"status": "error", "message": "Username already registered. Please choose another username or log in."}), 400
+
+        if User.query.filter(User.email == email).first():
+            return jsonify({"status": "error", "message": "Email already registered. Please log in with your credentials."}), 400
 
         user = User(username=username, email=email, role=role)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
 
-        login_user(user)
+        login_user(user, remember=remember)
 
         return jsonify({"status": "success", "message": "Registration successful", "user": user.to_dict()}), 201
     except Exception as e:
@@ -173,6 +196,9 @@ def api_login():
             password:
               type: string
               example: SecretPass123
+            remember:
+              type: boolean
+              example: true
     responses:
       200:
         description: Login successful
@@ -180,18 +206,69 @@ def api_login():
         description: Invalid credentials
     """
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         username_or_email = data.get('username', '').strip()
         password = data.get('password', '')
+        remember = bool(data.get('remember', True))
 
         user = User.query.filter((User.username == username_or_email) | (User.email == username_or_email.lower())).first()
 
         if not user or not user.check_password(password):
-            return jsonify({"status": "error", "message": "Invalid username or password"}), 401
+            return jsonify({"status": "error", "message": "Invalid username/email or password"}), 401
 
-        login_user(user)
+        login_user(user, remember=remember)
         return jsonify({"status": "success", "message": "Login successful", "user": user.to_dict()}), 200
     except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+@app.route('/api/user/reset-password', methods=['POST'])
+def api_reset_password():
+    """
+    User Password Reset Endpoint
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+              example: john@farm.org
+            new_password:
+              type: string
+              example: NewSecretPass456
+    responses:
+      200:
+        description: Password reset successfully
+      400:
+        description: Invalid data or user not found
+    """
+    try:
+        data = request.get_json() or {}
+        email = data.get('email', '').strip().lower()
+        new_password = data.get('new_password', '')
+
+        if not email or not new_password:
+            return jsonify({"status": "error", "message": "Email address and new password are required"}), 400
+
+        if len(new_password) < 6:
+            return jsonify({"status": "error", "message": "New password must be at least 6 characters long"}), 400
+
+        user = User.query.filter(User.email == email).first()
+        if not user:
+            return jsonify({"status": "error", "message": "No account found registered under this email address"}), 404
+
+        user.set_password(new_password)
+        db.session.commit()
+
+        login_user(user, remember=True)
+        return jsonify({"status": "success", "message": "Password reset successfully! You are now logged in.", "user": user.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 400
 
 @app.route('/api/logout', methods=['GET', 'POST'])

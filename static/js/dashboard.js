@@ -6,6 +6,7 @@ let yieldBenchmarkChart = null;
 
 let currentPredictionData = null;
 let savedScenarios = [];
+window.currentUser = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     initRangeSliders();
@@ -13,7 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initFormSubmit();
     initCharts();
     
-    // Auto-run initial prediction on page load & load DB scenarios
+    // Auto-check persistent user session, run initial prediction & load DB scenarios
+    checkUserSession();
     triggerPrediction();
     loadDatabaseScenarios();
 });
@@ -518,6 +520,47 @@ function escapeHtml(text) {
     });
 }
 
+// Session Management & Auto-Check
+async function checkUserSession() {
+    try {
+        const response = await fetch('/api/user/me');
+        const resJson = await response.json();
+        if (resJson.status === 'success' && resJson.authenticated) {
+            window.currentUser = resJson.user;
+            updateHeaderNavUser(window.currentUser);
+        } else {
+            window.currentUser = null;
+            updateHeaderNavUser(null);
+        }
+    } catch (err) {
+        console.error("Session check error:", err);
+    }
+}
+
+function updateHeaderNavUser(user) {
+    const navBox = document.getElementById('userNavBox');
+    if (!navBox) return;
+
+    if (user) {
+        navBox.innerHTML = `
+            <div class="user-profile-badge" onclick="openProfileModal()" title="View Account Profile & Settings">
+                <i class="fas fa-user-circle"></i>
+                <span id="navUsername">${escapeHtml(user.username)}</span>
+                <span class="user-role-tag">${escapeHtml(user.role || 'Farmer')}</span>
+                <button class="logout-btn" onclick="event.stopPropagation(); handleLogout()" title="Logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        `;
+    } else {
+        navBox.innerHTML = `
+            <button class="auth-trigger-btn" onclick="openAuthModal('login')">
+                <i class="fas fa-user-lock"></i> Login / Sign Up
+            </button>
+        `;
+    }
+}
+
 // Authentication Modal & Handlers
 function openAuthModal(defaultTab = 'login') {
     const modal = document.getElementById('authModal');
@@ -538,22 +581,20 @@ function closeAuthModal() {
 function switchAuthTab(tab) {
     const loginForm = document.getElementById('loginForm');
     const registerForm = document.getElementById('registerForm');
+    const resetForm = document.getElementById('resetForm');
     const tabLoginBtn = document.getElementById('tabLoginBtn');
     const tabRegisterBtn = document.getElementById('tabRegisterBtn');
+    const tabResetBtn = document.getElementById('tabResetBtn');
 
     hideAuthAlert();
 
-    if (tab === 'login') {
-        if (loginForm) loginForm.style.display = 'block';
-        if (registerForm) registerForm.style.display = 'none';
-        if (tabLoginBtn) tabLoginBtn.classList.add('active');
-        if (tabRegisterBtn) tabRegisterBtn.classList.remove('active');
-    } else {
-        if (loginForm) loginForm.style.display = 'none';
-        if (registerForm) registerForm.style.display = 'block';
-        if (tabLoginBtn) tabLoginBtn.classList.remove('active');
-        if (tabRegisterBtn) tabRegisterBtn.classList.add('active');
-    }
+    if (loginForm) loginForm.style.display = tab === 'login' ? 'block' : 'none';
+    if (registerForm) registerForm.style.display = tab === 'register' ? 'block' : 'none';
+    if (resetForm) resetForm.style.display = tab === 'reset' ? 'block' : 'none';
+
+    if (tabLoginBtn) tabLoginBtn.className = `auth-tab ${tab === 'login' ? 'active' : ''}`;
+    if (tabRegisterBtn) tabRegisterBtn.className = `auth-tab ${tab === 'register' ? 'active' : ''}`;
+    if (tabResetBtn) tabResetBtn.className = `auth-tab ${tab === 'reset' ? 'active' : ''}`;
 }
 
 function showAuthAlert(msg, type = 'error') {
@@ -572,24 +613,65 @@ function hideAuthAlert() {
     }
 }
 
+function checkPasswordStrength(password) {
+    const bar = document.getElementById('passwordStrengthBar');
+    const text = document.getElementById('passwordStrengthText');
+    if (!bar || !text) return;
+
+    if (!password) {
+        bar.style.width = '0%';
+        text.innerText = '';
+        return;
+    }
+
+    let score = 0;
+    if (password.length >= 6) score += 25;
+    if (password.length >= 10) score += 25;
+    if (/[0-9]/.test(password)) score += 25;
+    if (/[^a-zA-Z0-9]/.test(password)) score += 25;
+
+    bar.style.width = `${score}%`;
+    if (score <= 25) {
+        bar.style.backgroundColor = '#ef4444';
+        text.innerText = 'Weak password';
+        text.style.color = '#fca5a5';
+    } else if (score <= 50) {
+        bar.style.backgroundColor = '#f59e0b';
+        text.innerText = 'Fair password';
+        text.style.color = '#fcd34d';
+    } else if (score <= 75) {
+        bar.style.backgroundColor = '#3b82f6';
+        text.innerText = 'Good password';
+        text.style.color = '#93c5fd';
+    } else {
+        bar.style.backgroundColor = '#10b981';
+        text.innerText = 'Strong password';
+        text.style.color = '#6ee7b7';
+    }
+}
+
 async function submitLogin(e) {
     e.preventDefault();
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
+    const remember = document.getElementById('loginRemember') ? document.getElementById('loginRemember').checked : true;
 
     try {
         const response = await fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password, remember })
         });
         const resJson = await response.json();
 
         if (resJson.status === 'success') {
-            showAuthAlert("Login successful! Reloading...", "success");
+            showAuthAlert("Login successful! Syncing session...", "success");
+            window.currentUser = resJson.user;
             setTimeout(() => {
-                window.location.reload();
-            }, 800);
+                closeAuthModal();
+                updateHeaderNavUser(window.currentUser);
+                loadDatabaseScenarios();
+            }, 600);
         } else {
             showAuthAlert(resJson.message, "error");
         }
@@ -603,21 +685,36 @@ async function submitRegister(e) {
     const username = document.getElementById('regUsername').value;
     const email = document.getElementById('regEmail').value;
     const password = document.getElementById('regPassword').value;
+    const confirmPassword = document.getElementById('regConfirmPassword').value;
     const role = document.getElementById('regRole').value;
+    const remember = document.getElementById('regRemember') ? document.getElementById('regRemember').checked : true;
+
+    if (password !== confirmPassword) {
+        showAuthAlert("Passwords do not match. Please verify and re-enter.", "error");
+        return;
+    }
+
+    if (password.length < 6) {
+        showAuthAlert("Password must be at least 6 characters long.", "error");
+        return;
+    }
 
     try {
         const response = await fetch('/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, email, password, role })
+            body: JSON.stringify({ username, email, password, role, remember })
         });
         const resJson = await response.json();
 
         if (resJson.status === 'success') {
-            showAuthAlert("Account created successfully! Reloading...", "success");
+            showAuthAlert("Account created successfully! Syncing session...", "success");
+            window.currentUser = resJson.user;
             setTimeout(() => {
-                window.location.reload();
-            }, 800);
+                closeAuthModal();
+                updateHeaderNavUser(window.currentUser);
+                loadDatabaseScenarios();
+            }, 600);
         } else {
             showAuthAlert(resJson.message, "error");
         }
@@ -626,12 +723,121 @@ async function submitRegister(e) {
     }
 }
 
+async function submitResetPassword(e) {
+    e.preventDefault();
+    const email = document.getElementById('resetEmail').value;
+    const new_password = document.getElementById('resetNewPassword').value;
+
+    if (new_password.length < 6) {
+        showAuthAlert("New password must be at least 6 characters long.", "error");
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/user/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, new_password })
+        });
+        const resJson = await response.json();
+
+        if (resJson.status === 'success') {
+            showAuthAlert("Password reset successfully! Syncing session...", "success");
+            window.currentUser = resJson.user;
+            setTimeout(() => {
+                closeAuthModal();
+                updateHeaderNavUser(window.currentUser);
+                loadDatabaseScenarios();
+            }, 600);
+        } else {
+            showAuthAlert(resJson.message, "error");
+        }
+    } catch (err) {
+        showAuthAlert("Server error during password reset", "error");
+    }
+}
+
 async function handleLogout() {
     try {
         await fetch('/api/logout');
-        window.location.reload();
+        window.currentUser = null;
+        closeProfileModal();
+        updateHeaderNavUser(null);
+        loadDatabaseScenarios();
     } catch (err) {
         console.error("Logout error:", err);
+    }
+}
+
+// User Profile Modal Handlers
+function openProfileModal() {
+    if (!window.currentUser) {
+        openAuthModal('login');
+        return;
+    }
+
+    const modal = document.getElementById('profileModal');
+    if (!modal) return;
+
+    document.getElementById('profUsername').innerText = window.currentUser.username || 'User';
+    document.getElementById('profEmail').innerText = window.currentUser.email || '';
+    document.getElementById('profRoleBadge').innerText = window.currentUser.role || 'Farmer';
+    document.getElementById('profJoinedDate').innerText = window.currentUser.created_at || 'Registered User';
+
+    const alertBox = document.getElementById('profileAlert');
+    if (alertBox) alertBox.style.display = 'none';
+
+    modal.style.display = 'flex';
+}
+
+function closeProfileModal() {
+    const modal = document.getElementById('profileModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitChangePassword(e) {
+    e.preventDefault();
+    const old_password = document.getElementById('profOldPassword').value;
+    const new_password = document.getElementById('profNewPassword').value;
+    const alertBox = document.getElementById('profileAlert');
+
+    if (new_password.length < 6) {
+        if (alertBox) {
+            alertBox.innerText = "New password must be at least 6 characters long";
+            alertBox.className = "auth-alert error";
+            alertBox.style.display = "block";
+        }
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/user/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ old_password, new_password })
+        });
+        const resJson = await response.json();
+
+        if (resJson.status === 'success') {
+            if (alertBox) {
+                alertBox.innerText = "Password updated successfully!";
+                alertBox.className = "auth-alert success";
+                alertBox.style.display = "block";
+            }
+            document.getElementById('changePassForm').reset();
+        } else {
+            if (alertBox) {
+                alertBox.innerText = resJson.message;
+                alertBox.className = "auth-alert error";
+                alertBox.style.display = "block";
+            }
+        }
+    } catch (err) {
+        if (alertBox) {
+            alertBox.innerText = "Error updating password";
+            alertBox.className = "auth-alert error";
+            alertBox.style.display = "block";
+        }
     }
 }
 

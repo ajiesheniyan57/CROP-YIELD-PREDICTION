@@ -14,6 +14,9 @@ services:
       - PORT=5000
       - HOST=0.0.0.0
       - FLASK_ENV=production
+    volumes:
+      - ./agriyield.db:/app/agriyield.db
+      - ./.secret_key:/app/.secret_key
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
       interval: 30s

@@ -345,6 +345,40 @@ class TestCropYieldPredictionSystem(unittest.TestCase):
         del_res = self.app.delete(f'/api/scenarios/{scen_id}')
         self.assertEqual(del_res.status_code, 403)
 
+    def test_remember_token_and_reset_password_flow(self):
+        import time
+        ts = int(time.time())
+        uname = f"remember_user_{ts}"
+        email = f"remember_{ts}@agriyield.ai"
+
+        # 1. Register with remember=True
+        reg_payload = {
+            "username": uname,
+            "email": email,
+            "password": "PassRemember123!",
+            "role": "Farmer",
+            "remember": True
+        }
+        res = self.app.post('/api/register', data=json.dumps(reg_payload), content_type='application/json')
+        self.assertEqual(res.status_code, 201)
+        headers = dict(res.headers)
+        self.assertIn("Set-Cookie", headers)
+
+        # 2. Reset password via endpoint
+        reset_payload = {
+            "email": email,
+            "new_password": "ResetPassNew456!"
+        }
+        reset_res = self.app.post('/api/user/reset-password', data=json.dumps(reset_payload), content_type='application/json')
+        self.assertEqual(reset_res.status_code, 200)
+        reset_data = json.loads(reset_res.data)
+        self.assertEqual(reset_data["status"], "success")
+
+        # 3. Logout & Login with new reset password
+        self.app.get('/api/logout')
+        login_res = self.app.post('/api/login', data=json.dumps({"username": email, "password": "ResetPassNew456!", "remember": True}), content_type='application/json')
+        self.assertEqual(login_res.status_code, 200)
+
 if __name__ == '__main__':
     unittest.main()
 

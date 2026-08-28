@@ -43,11 +43,11 @@
                 <!-- User Session Pill / Auth Controls -->
                 <div id="userNavBox">
                     {% if user %}
-                    <div class="user-profile-badge">
+                    <div class="user-profile-badge" onclick="openProfileModal()" title="View Account Profile & Settings">
                         <i class="fas fa-user-circle"></i>
                         <span id="navUsername">{{ user.username }}</span>
                         <span class="user-role-tag">{{ user.role }}</span>
-                        <button class="logout-btn" onclick="handleLogout()" title="Logout">
+                        <button class="logout-btn" onclick="event.stopPropagation(); handleLogout()" title="Logout">
                             <i class="fas fa-sign-out-alt"></i>
                         </button>
                     </div>
@@ -369,6 +369,7 @@
                 <div class="auth-tabs">
                     <button id="tabLoginBtn" class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
                     <button id="tabRegisterBtn" class="auth-tab" onclick="switchAuthTab('register')">Register Account</button>
+                    <button id="tabResetBtn" class="auth-tab" onclick="switchAuthTab('reset')">Forgot Password?</button>
                 </div>
 
                 <div id="authAlert" class="auth-alert" style="display: none;"></div>
@@ -382,6 +383,13 @@
                     <div class="input-field">
                         <label for="loginPassword">Password</label>
                         <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <div class="auth-checkbox-row">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="loginRemember" checked>
+                            <span class="checkmark"></span>
+                            <span class="checkbox-label">Keep me logged in for 30 days</span>
+                        </label>
                     </div>
                     <button type="submit" class="btn-primary full-width">
                         <i class="fas fa-sign-in-alt"></i> Login to Dashboard
@@ -400,7 +408,15 @@
                     </div>
                     <div class="input-field">
                         <label for="regPassword">Password</label>
-                        <input type="password" id="regPassword" placeholder="Minimum 6 characters" required minlength="6">
+                        <input type="password" id="regPassword" placeholder="Minimum 6 characters" required minlength="6" oninput="checkPasswordStrength(this.value)">
+                        <div class="strength-bar-wrap">
+                            <div id="passwordStrengthBar" class="strength-bar"></div>
+                        </div>
+                        <div id="passwordStrengthText" class="strength-text"></div>
+                    </div>
+                    <div class="input-field">
+                        <label for="regConfirmPassword">Confirm Password</label>
+                        <input type="password" id="regConfirmPassword" placeholder="Re-enter password" required minlength="6">
                     </div>
                     <div class="input-field">
                         <label for="regRole">Role</label>
@@ -410,10 +426,80 @@
                             <option value="Enterprise">Enterprise Manager</option>
                         </select>
                     </div>
+                    <div class="auth-checkbox-row">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="regRemember" checked>
+                            <span class="checkmark"></span>
+                            <span class="checkbox-label">Stay logged in for 30 days</span>
+                        </label>
+                    </div>
                     <button type="submit" class="btn-primary full-width">
-                        <i class="fas fa-user-plus"></i> Create Account
+                        <i class="fas fa-user-plus"></i> Create Account & Log In
                     </button>
                 </form>
+
+                <!-- Reset Password Form -->
+                <form id="resetForm" onsubmit="submitResetPassword(event)" style="display: none;">
+                    <div class="input-field">
+                        <label for="resetEmail">Registered Email Address</label>
+                        <input type="email" id="resetEmail" placeholder="john@agriyield.ai" required>
+                    </div>
+                    <div class="input-field">
+                        <label for="resetNewPassword">New Password</label>
+                        <input type="password" id="resetNewPassword" placeholder="Minimum 6 characters" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn-primary full-width">
+                        <i class="fas fa-key"></i> Reset Password & Log In
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Profile & Account Settings Modal -->
+    <div id="profileModal" class="modal-backdrop" style="display: none;">
+        <div class="modal-content auth-modal-box">
+            <div class="modal-header">
+                <h3><i class="fas fa-id-card"></i> Account Profile & Settings</h3>
+                <button class="modal-close-btn" onclick="closeProfileModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="profileAlert" class="auth-alert" style="display: none;"></div>
+
+                <div class="profile-info-card">
+                    <div class="profile-avatar">
+                        <i class="fas fa-user-circle"></i>
+                    </div>
+                    <div class="profile-details">
+                        <h4 id="profUsername">User</h4>
+                        <p id="profEmail">email@example.com</p>
+                        <span id="profRoleBadge" class="user-role-tag">Farmer</span>
+                        <p class="prof-date"><i class="fas fa-calendar-alt"></i> Member since: <span id="profJoinedDate">Today</span></p>
+                    </div>
+                </div>
+
+                <hr class="profile-divider">
+
+                <h4 class="profile-subheading"><i class="fas fa-lock"></i> Change Security Password</h4>
+                <form id="changePassForm" onsubmit="submitChangePassword(event)">
+                    <div class="input-field">
+                        <label for="profOldPassword">Current Password</label>
+                        <input type="password" id="profOldPassword" placeholder="••••••••" required>
+                    </div>
+                    <div class="input-field">
+                        <label for="profNewPassword">New Password</label>
+                        <input type="password" id="profNewPassword" placeholder="Minimum 6 characters" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn-primary full-width">
+                        <i class="fas fa-shield-alt"></i> Update Password
+                    </button>
+                </form>
+
+                <div class="profile-modal-actions">
+                    <button class="btn-secondary full-width margin-top-10" onclick="handleLogout()">
+                        <i class="fas fa-sign-out-alt"></i> Log Out
+                    </button>
+                </div>
             </div>
         </div>
     </div>

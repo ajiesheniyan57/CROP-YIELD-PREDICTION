@@ -34,5 +34,6 @@ venv.bak/
 # Database & Generated Reports
 *.db
 *.sqlite3
+.secret_key
 static/reports/*.html
 .pytest_cache/
